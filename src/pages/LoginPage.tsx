@@ -58,10 +58,10 @@ export default function LoginPage() {
         <div className="w-full max-w-md bg-white rounded-lg shadow-lg border border-gray-100 overflow-hidden">
           <div className="bg-indigo-600 p-6 text-white">
             <h1 className="text-2xl font-bold text-center">
-              Welcome to YeooStore
+              Login Historial Médico Dra Oca
             </h1>
             <p className="text-indigo-100 text-center mt-2">
-              Login to manage your tasks
+              Control de pacientes y registros médicos
             </p>
           </div>
 
