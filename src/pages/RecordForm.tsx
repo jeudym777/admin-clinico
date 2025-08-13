@@ -257,10 +257,18 @@ export default function RecordForm() {
         <textarea className="border p-2 rounded col-span-full" rows={2} placeholder="Neurológico" value={form.ef_neurologico} onChange={e=>setForm((f:any)=>({...f, ef_neurologico:e.target.value}))} />
       </section>
 
+
+
+      
       {/* 9-12 Dx, plan, observaciones */}
       <section id="s7" className="border rounded p-4 grid gap-3">
-        <h2 className="font-medium">10. Diagnósticos</h2>
+       <h2 className="font-medium">9. Resultados de estudios complementarios </h2>
+        <textarea className="border p-2 rounded w-full" rows={3} value={form.estudios} onChange={e=>setForm((f:any)=>({...f, estudios:e.target.value}))} />
+        
+        
+        <h2 className="font-medium">10. Diagnóstico(s) presuntivo(s) o definitivo(s) </h2>
         <textarea className="border p-2 rounded w-full" rows={3} value={form.diagnosticos} onChange={e=>setForm((f:any)=>({...f, diagnosticos:e.target.value}))} />
+        
         <h2 className="font-medium">11. Plan / Tratamiento</h2>
         <textarea className="border p-2 rounded w-full" rows={3} value={form.plan} onChange={e=>setForm((f:any)=>({...f, plan:e.target.value}))} />
       </section>

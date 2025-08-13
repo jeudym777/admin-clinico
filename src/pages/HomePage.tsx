@@ -21,7 +21,7 @@ export default function HomePage() {
         </div>
 
         <Link
-          to="/dashboard"
+          to="/patients"
           className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg flex items-center"
         >
           <svg

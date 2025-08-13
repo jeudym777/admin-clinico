@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
-import DashboardPage from "@/pages/DashboardPage";
 import PatientsPage from "@/pages/PatientsPage";
 import RecordsList from "@/pages/RecordsList";
 import RecordForm from "@/pages/RecordForm";
@@ -14,7 +13,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
 
       <Route element={<ProtectedRoute />}>
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/" element={<Navigate to="/patients" replace />} />
         <Route path="/patients" element={<PatientsPage />} />
         <Route path="/patients/:id/records" element={<RecordsList />} />
         <Route path="/patients/:id/records/new" element={<RecordForm />} />

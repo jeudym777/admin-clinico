@@ -27,7 +27,7 @@ export default function LoginPage() {
     if (error) {
       toast.error(error.message);
     } else {
-      navigate("/dashboard");
+      navigate("/patients");
       toast.success("You are logged in successfully!");
     }
 
@@ -45,7 +45,7 @@ export default function LoginPage() {
     if (error) {
       toast.error(error.message);
     } else {
-      navigate("/dashboard");
+      navigate("/patients");
       toast.success("You are logged in successfully!");
     }
 
