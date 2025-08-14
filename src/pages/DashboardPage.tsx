@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useSignOut } from "@/hooks/useSignOut";
 import Layout from "./Layout";
-import ProductsPage from "@/pages/ProductsPage";
+
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -60,7 +60,6 @@ export default function DashboardPage() {
 
           {/* Contenido de productos */}
           <div className="px-6 py-5">
-            <ProductsPage />
           </div>
         </div>
       </div>
