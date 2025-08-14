@@ -1,4 +1,6 @@
 import { useState } from "react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import { supabase } from "@/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
@@ -217,8 +219,8 @@ export default function PatientsPage() {
       .order("created_at", { ascending: false });
     if (error) return toast.error(error.message);
 
-    const { default: jsPDF } = await import("jspdf");
-    const autoTable = (await import("jspdf-autotable")).default;
+  const pdfDoc1 = new jsPDF();
+  const autoTable1 = (window as any).jspdf?.autotable || (pdfDoc1 as any).autoTable;
 
     const doc = new jsPDF();
     doc.text("Listado de pacientes", 14, 14);
@@ -233,7 +235,7 @@ export default function PatientsPage() {
       fmtDT(r.created_at), // ← aquí el formato bonito
     ]);
 
-    autoTable(doc, {
+  autoTable1(pdfDoc1, {
       startY: 20,
       head: [["Expediente", "Nombre", "Sexo", "Edad", "Estado civil", "Ocupación", "Creado"]],
       body: rows,
@@ -246,8 +248,8 @@ export default function PatientsPage() {
 
   // Exportar PDF de un paciente individual
   const exportPatientPDF = async (patient: Patient) => {
-    const { default: jsPDF } = await import("jspdf");
-    const autoTable = (await import("jspdf-autotable")).default;
+  const pdfDoc2 = new jsPDF();
+  const autoTable2 = (window as any).jspdf?.autotable || (pdfDoc2 as any).autoTable;
     const doc = new jsPDF();
     doc.text("Ficha de paciente", 14, 14);
     const headers = ["Campo", "Valor"];
@@ -260,7 +262,7 @@ export default function PatientsPage() {
       ["Ocupación", patient.ocupacion ?? ""],
       ["Creado", fmtDT(patient.created_at)],
     ];
-    autoTable(doc, {
+  autoTable2(pdfDoc2, {
       startY: 20,
       head: [headers],
       body: fields,
