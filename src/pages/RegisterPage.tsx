@@ -14,7 +14,7 @@ interface RegisterForm {
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { register, handleSubmit, formState, watch, setError } = useForm<RegisterForm>();
+  const { register, handleSubmit, formState, setError } = useForm<RegisterForm>();
 
   const onRegisterSubmit = async (data: RegisterForm) => {
     if (data.password !== data.confirmPassword) {
@@ -43,8 +43,8 @@ export default function RegisterPage() {
       <div className="min-h-[60vh] flex items-center justify-center px-4">
         <div className="w-full max-w-md bg-white rounded-lg shadow-lg border border-gray-100 overflow-hidden">
           <div className="bg-indigo-600 p-6 text-white">
-            <h1 className="text-2xl font-bold text-center">Registro exclusivo</h1>
-            <p className="text-indigo-100 text-center mt-2">Solo usuarios autorizados</p>
+            <h1 className="text-2xl font-bold text-center">Registro Exclusivo</h1>
+            <p className="text-indigo-100 text-center mt-2">Historial Médico Dra Oca</p>
           </div>
           <form className="p-6 space-y-6" onSubmit={handleSubmit(onRegisterSubmit)}>
             <div className="space-y-4">
