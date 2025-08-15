@@ -8,14 +8,19 @@ import { useNavigate } from "react-router-dom";
 interface RegisterForm {
   email: string;
   password: string;
+  confirmPassword: string;
 }
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { register, handleSubmit, formState } = useForm<RegisterForm>();
+  const { register, handleSubmit, formState, watch, setError } = useForm<RegisterForm>();
 
   const onRegisterSubmit = async (data: RegisterForm) => {
+    if (data.password !== data.confirmPassword) {
+      setError("confirmPassword", { type: "manual", message: "Las contraseñas no coinciden" });
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email: data.email,
@@ -50,6 +55,13 @@ export default function RegisterPage() {
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                 <input id="password" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors" type="password" placeholder="••••••••" {...register("password", { required: true })} />
+              </div>
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirmar contraseña</label>
+                <input id="confirmPassword" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors" type="password" placeholder="••••••••" {...register("confirmPassword", { required: true })} />
+                {formState.errors.confirmPassword && (
+                  <p className="text-red-500 text-sm mt-1">{formState.errors.confirmPassword.message as string}</p>
+                )}
               </div>
             </div>
             <button type="submit" disabled={loading || !formState.isValid} className="cursor-pointer w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md font-medium">
