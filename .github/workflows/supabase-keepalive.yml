@@ -1,0 +1,28 @@
+name: Supabase Keep-Alive (Prevenir Pausa)
+
+on:
+  schedule:
+    # Se ejecuta automáticamente todos los días a las 08:00 UTC
+    - cron: '0 8 * * *'
+  # Permite disparar la acción manualmente desde la pestaña "Actions" en GitHub
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    name: Ping Supabase Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Ejecutar Ping Preventivo
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://ffwdogmciqwwiptpdztw.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmd2RvZ21jaXF3d2lwdHBkenR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MTM0MDMsImV4cCI6MjA3MDM4OTQwM30.f0het071ON2KL_0Qcsc_7mB3Nc8orbV5MMZ1PHlzr38' }}
+        run: |
+          node scripts/ping-supabase.mjs

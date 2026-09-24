@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/supabaseClient";
 import { toast } from "react-toastify";
@@ -18,13 +18,13 @@ function Row({
   hint?: string;
 }) {
   return (
-    <div className="grid grid-cols-[180px_1fr] items-center gap-3">
-      <label htmlFor={id} className="text-sm text-gray-700">
+    <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] items-start sm:items-center gap-2 sm:gap-4 py-2 border-b border-slate-50 last:border-b-0">
+      <label htmlFor={id} className="text-xs font-semibold text-slate-700 tracking-wide">
         {label}
       </label>
       <div>
         {children}
-        {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+        {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
       </div>
     </div>
   );
@@ -38,6 +38,20 @@ export default function RecordForm() {
   const userId = useSessionUser();
 
   const isEdit = Boolean(recordId);
+
+  const { data: patient } = useQuery({
+    queryKey: ["patient", patientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("patients")
+        .select("*")
+        .eq("id", patientId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: Boolean(patientId),
+  });
 
   const { data: initialData } = useQuery({
     queryKey: ["record", recordId],
@@ -149,16 +163,25 @@ export default function RecordForm() {
     mutationFn: async () => {
       if (!patientId) throw new Error("Paciente inválido");
 
+      const cleanForm = { ...form };
+      delete cleanForm.id;
+      delete cleanForm.created_at;
       const payload: any = {
-        ...form,
+        ...cleanForm,
         patient_id: patientId,
         updated_by: userId ?? null,
       };
 
-      // números: "" -> null, "12" -> 12
+      // números: "" o espacios -> null, texto inválido -> null, números válidos -> Number
       for (const k of numberFields) {
         const v = (form as any)[k];
-        payload[k] = v === "" || v === undefined ? null : Number(v);
+        const strVal = typeof v === "string" ? v.trim() : v;
+        if (strVal === "" || strVal === undefined || strVal === null) {
+          payload[k] = null;
+        } else {
+          const num = Number(strVal);
+          payload[k] = Number.isNaN(num) ? null : num;
+        }
       }
       // fechas: "" -> null
       for (const k of dateFields) {
@@ -204,73 +227,132 @@ export default function RecordForm() {
   });
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
-          {isEdit ? "Editar consulta" : "Nueva consulta"}
-        </h1>
-        <div className="flex gap-2">
+    <div className="space-y-6">
+      {/* Banner con contexto del paciente */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wider text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-0.5 rounded-full">
+            Consulta Médica
+          </span>
+          <h2 className="text-xl font-bold text-slate-900 mt-1">
+            {patient ? patient.nombre : "Cargando paciente..."}
+          </h2>
+          {patient && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-500 mt-1">
+              <span><b>Expediente:</b> <span className="font-mono text-indigo-700 font-semibold">{patient.expediente}</span></span>
+              <span>&bull;</span>
+              <span><b>Sexo:</b> {patient.sexo ?? "No especificado"}</span>
+              <span>&bull;</span>
+              <span><b>Edad:</b> {patient.edad != null ? `${patient.edad} años` : "—"}</span>
+              {patient.estado_civil && (
+                <>
+                  <span>&bull;</span>
+                  <span><b>Estado civil:</b> {patient.estado_civil}</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <Link
+          to={`/patients/${patientId}/records`}
+          className="text-xs font-semibold px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors whitespace-nowrap shadow-xs"
+        >
+          &larr; Volver al Historial
+        </Link>
+      </div>
+
+      {/* Barra de Acciones */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-bold text-slate-900">
+            {isEdit ? "Editar Consulta Clínica" : "Nueva Nota de Consulta"}
+          </h1>
+          <p className="text-xs text-slate-500">
+            {isEdit ? "Modifica los campos clínicos y guarda los cambios" : "Completa las secciones del expediente clínico del paciente"}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
           {isEdit && (
             <button
               onClick={() => {
-                if (confirm("¿Eliminar esta consulta?")) del.mutate();
+                if (confirm("¿Estás seguro de que deseas eliminar esta consulta?")) del.mutate();
               }}
-              className="px-4 py-2 rounded border border-red-600 text-red-600"
+              className="px-3.5 py-2 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold transition-colors cursor-pointer"
             >
               Eliminar
             </button>
           )}
           <button
             onClick={() => upsert.mutate()}
-            className="px-4 py-2 rounded bg-black text-white disabled:opacity-50"
+            className="px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 shadow-md shadow-indigo-100 transition-all cursor-pointer disabled:opacity-50"
             disabled={upsert.isPending}
           >
-            {upsert.isPending ? "Guardando…" : "Guardar"}
+            {upsert.isPending ? "Guardando…" : isEdit ? "Guardar Cambios" : "Crear Consulta"}
           </button>
         </div>
       </div>
 
-      {/* Navegación simple por secciones */}
-      <div className="flex flex-wrap gap-2 text-sm">
+      {/* Navegación rápida por secciones */}
+      <div className="flex flex-wrap gap-2 text-xs">
         {[
-          "Motivo & Enfermedad",
-          "Antecedentes pers.",
-          "No patológicos",
-          "Gineco-obs.",
-          "Familiares",
-          "Revisión sistemas",
-          "Exploración física",
-          "Dx & Plan",
-          "Observaciones",
+          "1. Motivo & Enf.",
+          "2. Antecedentes patológicos",
+          "3. No patológicos",
+          "4. Gineco-obs.",
+          "5. Familiares",
+          "6. Revisión sistemas",
+          "7. Signos vitales & EF",
+          "8. Dx & Plan",
+          "9. Observaciones",
         ].map((s, i) => (
-          <a key={i} href={`#s${i}`} className="px-2 py-1 border rounded">
+          <a
+            key={i}
+            href={`#s${i}`}
+            className="px-3 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-700 text-slate-600 font-medium rounded-xl transition-all shadow-2xs"
+          >
             {s}
           </a>
         ))}
       </div>
 
       {/* 1 Motivo / Enfermedad actual */}
-      <section id="s0" className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">1. Motivo de consulta</h2>
-        <textarea
-          className="border p-2 rounded w-full"
-          rows={3}
-          value={form.motivo_consulta}
-          onChange={set("motivo_consulta")}
-        />
-        <h2 className="font-medium">2. Enfermedad actual</h2>
-        <textarea
-          className="border p-2 rounded w-full"
-          rows={5}
-          value={form.enfermedad_actual}
-          onChange={set("enfermedad_actual")}
-        />
+      <section id="s0" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+        <h2 className="text-base font-bold text-slate-900 pb-2 border-b border-slate-100">
+          1. Motivo de Consulta y Enfermedad Actual
+        </h2>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+            Motivo de Consulta
+          </label>
+          <textarea
+            className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            rows={3}
+            placeholder="Describa el motivo por el cual acude el paciente..."
+            value={form.motivo_consulta}
+            onChange={set("motivo_consulta")}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+            Enfermedad Actual
+          </label>
+          <textarea
+            className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            rows={4}
+            placeholder="Evolución del cuadro clínico, síntomas asociados, tiempo de evolución..."
+            value={form.enfermedad_actual}
+            onChange={set("enfermedad_actual")}
+          />
+        </div>
       </section>
 
-      {/* 3 Antecedentes personales patológicos */}
-      <section id="s1" className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">3. Antecedentes personales patológicos</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      {/* 2 Antecedentes personales patológicos */}
+      <section id="s1" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+        <h2 className="text-base font-bold text-slate-900 pb-2 border-b border-slate-100">
+          2. Antecedentes Personales Patológicos (AP)
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
           {(
             [
               ["ap_diabetes", "Diabetes"],
@@ -280,174 +362,207 @@ export default function RecordForm() {
               ["ap_renal", "Renal"],
             ] as const
           ).map(([k, label]) => (
-            <label key={k} className="flex items-center gap-2">
+            <label key={k} className="flex items-center gap-2.5 cursor-pointer text-sm font-medium text-slate-700">
               <input
                 type="checkbox"
+                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
                 checked={form[k]}
                 onChange={(e) =>
                   setForm((f: any) => ({ ...f, [k]: e.target.checked }))
                 }
-              />{" "}
+              />
               {label}
             </label>
           ))}
         </div>
-        <Row id="ap_alergias" label="Alergias">
+        <Row id="ap_alergias" label="Alergias" hint="Medicamentos, alimentos, etc.">
           <input
             id="ap_alergias"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Alergias conocidas o 'Negadas'"
             value={form.ap_alergias}
             onChange={set("ap_alergias")}
           />
         </Row>
-        <Row id="ap_otros" label="Otros">
+        <Row id="ap_otros" label="Otros Antecedentes">
           <input
             id="ap_otros"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Cirugías previas, traumatismos, transfusiones..."
             value={form.ap_otros}
             onChange={set("ap_otros")}
           />
         </Row>
       </section>
 
-      {/* 4 No patológicos */}
-      <section id="s2" className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">4. Antecedentes personales no patológicos</h2>
+      {/* 3 No patológicos */}
+      <section id="s2" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+        <h2 className="text-base font-bold text-slate-900 pb-2 border-b border-slate-100">
+          3. Antecedentes Personales No Patológicos (ANP)
+        </h2>
 
         <Row id="anp_alimentacion" label="Alimentación">
           <input
             id="anp_alimentacion"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Adecuada / Inadecuada, frecuencia..."
             value={form.anp_alimentacion}
             onChange={set("anp_alimentacion")}
           />
         </Row>
 
-        <Row id="anp_actividad_fisica" label="Actividad física">
+        <Row id="anp_actividad_fisica" label="Actividad Física">
           <input
             id="anp_actividad_fisica"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Sedentario / Activo, frecuencia semanal..."
             value={form.anp_actividad_fisica}
             onChange={set("anp_actividad_fisica")}
           />
         </Row>
 
-        <Row id="anp_alcohol" label="Alcohol">
+        <Row id="anp_alcohol" label="Consumo de Alcohol">
           <input
             id="anp_alcohol"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Ocasional, social, negado..."
             value={form.anp_alcohol}
             onChange={set("anp_alcohol")}
           />
         </Row>
 
-        <Row id="anp_tabaco" label="Tabaco">
+        <Row id="anp_tabaco" label="Tabaquismo">
           <input
             id="anp_tabaco"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Cigarrillos/día o negado..."
             value={form.anp_tabaco}
             onChange={set("anp_tabaco")}
           />
         </Row>
 
-        <Row id="anp_drogas" label="Drogas">
+        <Row id="anp_drogas" label="Otras Sustancias">
           <input
             id="anp_drogas"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Negadas o especificar..."
             value={form.anp_drogas}
             onChange={set("anp_drogas")}
           />
         </Row>
 
-        <Row id="anp_vacunacion" label="Vacunación">
+        <Row id="anp_vacunacion" label="Inmunizaciones / Vacunas">
           <input
             id="anp_vacunacion"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Esquema completo, COVID, Influenza..."
             value={form.anp_vacunacion}
             onChange={set("anp_vacunacion")}
           />
         </Row>
       </section>
 
-      {/* 5 Gineco-obstétricos */}
-      <section id="s3" className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">5. Gineco-obstétricos</h2>
+      {/* 4 Gineco-obstétricos */}
+      <section id="s3" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h2 className="text-base font-bold text-slate-900">
+            4. Gineco-Obstétricos (GO)
+          </h2>
+          {patient?.sexo === "Masculino" && (
+            <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
+              No aplica / Opcional para paciente masculino
+            </span>
+          )}
+        </div>
 
-        <Row id="go_menarca" label="Menarca (años)">
+        <Row id="go_menarca" label="Menarca (Edad)">
           <input
             id="go_menarca"
             type="number"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Años"
             value={form.go_menarca ?? ""}
             onChange={set("go_menarca")}
           />
         </Row>
 
-        <Row id="go_fum" label="FUM">
+        <Row id="go_fum" label="FUM (Última Regla)">
           <input
             id="go_fum"
             type="date"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
             value={form.go_fum ?? ""}
             onChange={set("go_fum")}
           />
         </Row>
 
-        <Row id="go_ciclo" label="Ciclo">
+        <Row id="go_ciclo" label="Ciclo Menstrual">
           <input
             id="go_ciclo"
-            className="border p-2 rounded w-full"
-            placeholder="Regular / Irregular"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Regular (28x4) / Irregular..."
             value={form.go_ciclo ?? ""}
             onChange={set("go_ciclo")}
           />
         </Row>
 
-        <Row id="go_embarazos" label="Embarazos">
-          <input
-            id="go_embarazos"
-            type="number"
-            className="border p-2 rounded w-full"
-            value={form.go_embarazos ?? ""}
-            onChange={set("go_embarazos")}
-          />
-        </Row>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Embarazos (G)</label>
+            <input
+              id="go_embarazos"
+              type="number"
+              min={0}
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+              value={form.go_embarazos ?? ""}
+              onChange={set("go_embarazos")}
+            />
+          </div>
 
-        <Row id="go_partos" label="Partos">
-          <input
-            id="go_partos"
-            type="number"
-            className="border p-2 rounded w-full"
-            value={form.go_partos ?? ""}
-            onChange={set("go_partos")}
-          />
-        </Row>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Partos (P)</label>
+            <input
+              id="go_partos"
+              type="number"
+              min={0}
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+              value={form.go_partos ?? ""}
+              onChange={set("go_partos")}
+            />
+          </div>
 
-        <Row id="go_cesareas" label="Cesáreas">
-          <input
-            id="go_cesareas"
-            type="number"
-            className="border p-2 rounded w-full"
-            value={form.go_cesareas ?? ""}
-            onChange={set("go_cesareas")}
-          />
-        </Row>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Cesáreas (C)</label>
+            <input
+              id="go_cesareas"
+              type="number"
+              min={0}
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+              value={form.go_cesareas ?? ""}
+              onChange={set("go_cesareas")}
+            />
+          </div>
 
-        <Row id="go_abortos" label="Abortos">
-          <input
-            id="go_abortos"
-            type="number"
-            className="border p-2 rounded w-full"
-            value={form.go_abortos ?? ""}
-            onChange={set("go_abortos")}
-          />
-        </Row>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Abortos (A)</label>
+            <input
+              id="go_abortos"
+              type="number"
+              min={0}
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+              value={form.go_abortos ?? ""}
+              onChange={set("go_abortos")}
+            />
+          </div>
+        </div>
       </section>
 
-      {/* 6 Familiares */}
-      <section id="s4" className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">6. Antecedentes familiares</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      {/* 5 Familiares */}
+      <section id="s4" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+        <h2 className="text-base font-bold text-slate-900 pb-2 border-b border-slate-100">
+          5. Antecedentes Heredofamiliares (AF)
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
           {(
             [
               ["af_diabetes", "Diabetes"],
@@ -455,271 +570,426 @@ export default function RecordForm() {
               ["af_cancer", "Cáncer"],
             ] as const
           ).map(([k, label]) => (
-            <label key={k} className="flex items-center gap-2">
+            <label key={k} className="flex items-center gap-2.5 cursor-pointer text-sm font-medium text-slate-700">
               <input
                 type="checkbox"
+                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
                 checked={form[k]}
                 onChange={(e) =>
                   setForm((f: any) => ({ ...f, [k]: e.target.checked }))
                 }
-              />{" "}
+              />
               {label}
             </label>
           ))}
         </div>
-        <Row id="af_hereditarias" label="Hereditarias">
+        <Row id="af_hereditarias" label="Enf. Hereditarias">
           <input
             id="af_hereditarias"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Cardiopatías, nefropatías, asma..."
             value={form.af_hereditarias}
             onChange={set("af_hereditarias")}
           />
         </Row>
-        <Row id="af_otros" label="Otros">
+        <Row id="af_otros" label="Otros Familiares">
           <input
             id="af_otros"
-            className="border p-2 rounded w-full"
+            className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden"
+            placeholder="Otros antecedentes familiares..."
             value={form.af_otros}
             onChange={set("af_otros")}
           />
         </Row>
       </section>
 
-      {/* 7 Revisión por sistemas */}
-      <section id="s5" className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">7. Revisión por aparatos y sistemas</h2>
+      {/* 6 Revisión por sistemas */}
+      <section id="s5" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+        <div className="pb-2 border-b border-slate-100">
+          <h2 className="text-base font-bold text-slate-900">
+            6. Revisión por Aparatos y Sistemas
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Interrogatorio por aparatos y sistemas clínicos
+          </p>
+        </div>
 
-        <Row id="rs_general" label="General">
-          <textarea
-            id="rs_general"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.rs_general}
-            onChange={set("rs_general")}
-          />
-        </Row>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="rs_general" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Síntomas Generales
+            </label>
+            <textarea
+              id="rs_general"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+              rows={2}
+              placeholder="Astenia, adinamia, cambios de peso, fiebre..."
+              value={form.rs_general}
+              onChange={set("rs_general")}
+            />
+          </div>
 
-        <Row id="rs_cardiovascular" label="Cardiovascular">
-          <textarea
-            id="rs_cardiovascular"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.rs_cardiovascular}
-            onChange={set("rs_cardiovascular")}
-          />
-        </Row>
+          <div>
+            <label htmlFor="rs_cardiovascular" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Cardiovascular
+            </label>
+            <textarea
+              id="rs_cardiovascular"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+              rows={2}
+              placeholder="Disnea, palpitaciones, dolor precordial, edemas..."
+              value={form.rs_cardiovascular}
+              onChange={set("rs_cardiovascular")}
+            />
+          </div>
 
-        <Row id="rs_respiratorio" label="Respiratorio">
-          <textarea
-            id="rs_respiratorio"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.rs_respiratorio}
-            onChange={set("rs_respiratorio")}
-          />
-        </Row>
+          <div>
+            <label htmlFor="rs_respiratorio" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Respiratorio
+            </label>
+            <textarea
+              id="rs_respiratorio"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+              rows={2}
+              placeholder="Tos, expectoración, disnea, sibilancias..."
+              value={form.rs_respiratorio}
+              onChange={set("rs_respiratorio")}
+            />
+          </div>
 
-        <Row id="rs_digestivo" label="Digestivo">
-          <textarea
-            id="rs_digestivo"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.rs_digestivo}
-            onChange={set("rs_digestivo")}
-          />
-        </Row>
+          <div>
+            <label htmlFor="rs_digestivo" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Digestivo
+            </label>
+            <textarea
+              id="rs_digestivo"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+              rows={2}
+              placeholder="Disfagia, pirosis, náuseas, dolor abdominal, hábito intestinal..."
+              value={form.rs_digestivo}
+              onChange={set("rs_digestivo")}
+            />
+          </div>
 
-        <Row id="rs_genitourinario" label="Genitourinario">
-          <textarea
-            id="rs_genitourinario"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.rs_genitourinario}
-            onChange={set("rs_genitourinario")}
-          />
-        </Row>
+          <div>
+            <label htmlFor="rs_genitourinario" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Genitourinario
+            </label>
+            <textarea
+              id="rs_genitourinario"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+              rows={2}
+              placeholder="Disuria, polaquiuria, hematuria, tenesmo..."
+              value={form.rs_genitourinario}
+              onChange={set("rs_genitourinario")}
+            />
+          </div>
 
-        <Row id="rs_neurologico" label="Neurológico">
-          <textarea
-            id="rs_neurologico"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.rs_neurologico}
-            onChange={set("rs_neurologico")}
-          />
-        </Row>
+          <div>
+            <label htmlFor="rs_neurologico" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Neurológico
+            </label>
+            <textarea
+              id="rs_neurologico"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+              rows={2}
+              placeholder="Cefalea, mareos, parestesias, convulsiones, alteraciones del sueño..."
+              value={form.rs_neurologico}
+              onChange={set("rs_neurologico")}
+            />
+          </div>
 
-        <Row id="rs_musculoesqueletico" label="Músculo-esquelético">
-          <textarea
-            id="rs_musculoesqueletico"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.rs_musculoesqueletico}
-            onChange={set("rs_musculoesqueletico")}
-          />
-        </Row>
+          <div className="md:col-span-2">
+            <label htmlFor="rs_musculoesqueletico" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Músculo-Esquelético
+            </label>
+            <textarea
+              id="rs_musculoesqueletico"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+              rows={2}
+              placeholder="Artralgias, mialgias, rigidez articular, limitaciones funcionales..."
+              value={form.rs_musculoesqueletico}
+              onChange={set("rs_musculoesqueletico")}
+            />
+          </div>
+        </div>
       </section>
 
-      {/* 8 Exploración física */}
-      <section id="s6" className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">8. Exploración física</h2>
+      {/* 7 Signos vitales y Exploración física */}
+      <section id="s6" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+        <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">
+              7. Signos Vitales y Exploración Física
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Somatometría, constantes vitales y examen físico segmentario
+            </p>
+          </div>
+          {form.sv_imc && (
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <span className="text-xs font-semibold text-emerald-800">IMC:</span>
+              <span className="text-sm font-bold text-emerald-700">{form.sv_imc} kg/m²</span>
+            </div>
+          )}
+        </div>
 
-        <Row id="sv_ta" label="TA (mmHg)">
-          <input
-            id="sv_ta"
-            className="border p-2 rounded w-full"
-            value={form.sv_ta ?? ""}
-            onChange={set("sv_ta")}
-          />
-        </Row>
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+            Constantes Vitales y Somatometría
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+            <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+              <label htmlFor="sv_ta" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                TA (mmHg)
+              </label>
+              <input
+                id="sv_ta"
+                className="w-full px-2.5 py-1.5 text-sm font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                placeholder="120/80"
+                value={form.sv_ta ?? ""}
+                onChange={set("sv_ta")}
+              />
+            </div>
 
-        <Row id="sv_fc" label="FC (lpm)">
-          <input
-            id="sv_fc"
-            className="border p-2 rounded w-full"
-            value={form.sv_fc ?? ""}
-            onChange={set("sv_fc")}
-          />
-        </Row>
+            <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+              <label htmlFor="sv_fc" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                FC (lpm)
+              </label>
+              <input
+                id="sv_fc"
+                className="w-full px-2.5 py-1.5 text-sm font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                placeholder="75"
+                value={form.sv_fc ?? ""}
+                onChange={set("sv_fc")}
+              />
+            </div>
 
-        <Row id="sv_fr" label="FR (rpm)">
-          <input
-            id="sv_fr"
-            className="border p-2 rounded w-full"
-            value={form.sv_fr ?? ""}
-            onChange={set("sv_fr")}
-          />
-        </Row>
+            <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+              <label htmlFor="sv_fr" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                FR (rpm)
+              </label>
+              <input
+                id="sv_fr"
+                className="w-full px-2.5 py-1.5 text-sm font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                placeholder="16"
+                value={form.sv_fr ?? ""}
+                onChange={set("sv_fr")}
+              />
+            </div>
 
-        <Row id="sv_temp" label="Temp (°C)">
-          <input
-            id="sv_temp"
-            className="border p-2 rounded w-full"
-            value={form.sv_temp ?? ""}
-            onChange={set("sv_temp")}
-          />
-        </Row>
+            <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+              <label htmlFor="sv_temp" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Temp (°C)
+              </label>
+              <input
+                id="sv_temp"
+                className="w-full px-2.5 py-1.5 text-sm font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                placeholder="36.5"
+                value={form.sv_temp ?? ""}
+                onChange={set("sv_temp")}
+              />
+            </div>
 
-        <Row id="sv_peso" label="Peso (kg)">
-          <input
-            id="sv_peso"
-            type="number"
-            step="0.01"
-            className="border p-2 rounded w-full"
-            value={form.sv_peso ?? ""}
-            onChange={set("sv_peso")}
-          />
-        </Row>
+            <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+              <label htmlFor="sv_peso" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Peso (kg)
+              </label>
+              <input
+                id="sv_peso"
+                type="number"
+                step="0.01"
+                className="w-full px-2.5 py-1.5 text-sm font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                placeholder="70"
+                value={form.sv_peso ?? ""}
+                onChange={set("sv_peso")}
+              />
+            </div>
 
-        <Row id="sv_talla" label="Talla (m)">
-          <input
-            id="sv_talla"
-            type="number"
-            step="0.01"
-            className="border p-2 rounded w-full"
-            value={form.sv_talla ?? ""}
-            onChange={set("sv_talla")}
-          />
-        </Row>
+            <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+              <label htmlFor="sv_talla" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Talla (m)
+              </label>
+              <input
+                id="sv_talla"
+                type="number"
+                step="0.01"
+                className="w-full px-2.5 py-1.5 text-sm font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                placeholder="1.70"
+                value={form.sv_talla ?? ""}
+                onChange={set("sv_talla")}
+              />
+            </div>
 
-        <Row id="sv_imc" label="IMC (kg/m²)" hint="Se calcula automáticamente">
-          <input
-            id="sv_imc"
-            className="border p-2 rounded w-full"
-            value={form.sv_imc ?? ""}
-            onChange={set("sv_imc")}
-            readOnly
-          />
-        </Row>
+            <div className="col-span-2 sm:col-span-3 lg:col-span-1 bg-indigo-50/60 p-3 rounded-xl border border-indigo-100">
+              <label htmlFor="sv_imc" className="block text-[11px] font-bold uppercase tracking-wider text-indigo-700 mb-1">
+                IMC (kg/m²)
+              </label>
+              <input
+                id="sv_imc"
+                className="w-full px-2.5 py-1.5 text-sm font-bold text-indigo-900 bg-white/80 border border-indigo-200 rounded-lg outline-hidden cursor-not-allowed"
+                placeholder="Auto"
+                value={form.sv_imc ?? ""}
+                readOnly
+              />
+            </div>
+          </div>
+        </div>
 
-        <Row id="ef_cabeza_cuello" label="Cabeza y cuello">
-          <textarea
-            id="ef_cabeza_cuello"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.ef_cabeza_cuello}
-            onChange={set("ef_cabeza_cuello")}
-          />
-        </Row>
+        <div className="pt-2 border-t border-slate-100 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Examen Físico Segmentario
+          </h3>
 
-        <Row id="ef_torax" label="Tórax">
-          <textarea
-            id="ef_torax"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.ef_torax}
-            onChange={set("ef_torax")}
-          />
-        </Row>
+          <div className="space-y-3">
+            <Row id="ef_cabeza_cuello" label="Cabeza y Cuello">
+              <textarea
+                id="ef_cabeza_cuello"
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+                rows={2}
+                placeholder="Normocéfalo, pupilas isocóricas reactivas, mucosa oral húmeda, cuello sin adenopatías..."
+                value={form.ef_cabeza_cuello}
+                onChange={set("ef_cabeza_cuello")}
+              />
+            </Row>
 
-        <Row id="ef_abdomen" label="Abdomen">
-          <textarea
-            id="ef_abdomen"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.ef_abdomen}
-            onChange={set("ef_abdomen")}
-          />
-        </Row>
+            <Row id="ef_torax" label="Tórax">
+              <textarea
+                id="ef_torax"
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+                rows={2}
+                placeholder="Movimientos respiratorios simétricos, ruidos respiratorios normales, ruidos cardíacos rítmicos sin soplos..."
+                value={form.ef_torax}
+                onChange={set("ef_torax")}
+              />
+            </Row>
 
-        <Row id="ef_extremidades" label="Extremidades">
-          <textarea
-            id="ef_extremidades"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.ef_extremidades}
-            onChange={set("ef_extremidades")}
-          />
-        </Row>
+            <Row id="ef_abdomen" label="Abdomen">
+              <textarea
+                id="ef_abdomen"
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+                rows={2}
+                placeholder="Blando, depresible, no doloroso a la palpación profunda, RHA normales, sin visceromegalias ni signos de irritación peritoneal..."
+                value={form.ef_abdomen}
+                onChange={set("ef_abdomen")}
+              />
+            </Row>
 
-        <Row id="ef_neurologico" label="Neurológico">
-          <textarea
-            id="ef_neurologico"
-            className="border p-2 rounded w-full"
-            rows={2}
-            value={form.ef_neurologico}
-            onChange={set("ef_neurologico")}
-          />
-        </Row>
+            <Row id="ef_extremidades" label="Extremidades">
+              <textarea
+                id="ef_extremidades"
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+                rows={2}
+                placeholder="Simétricas, arcos de movilidad completos, pulsos distales presentes y simétricos, sin edemas periféricos..."
+                value={form.ef_extremidades}
+                onChange={set("ef_extremidades")}
+              />
+            </Row>
+
+            <Row id="ef_neurologico" label="Neurológico">
+              <textarea
+                id="ef_neurologico"
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+                rows={2}
+                placeholder="Alerta, orientado en las 3 esferas, lenguaje coherente, sensibilidad y fuerza muscular 5/5..."
+                value={form.ef_neurologico}
+                onChange={set("ef_neurologico")}
+              />
+            </Row>
+          </div>
+        </div>
       </section>
 
-      {/* 9-12 Dx, plan, observaciones */}
-      <section id="s7" className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">9. Resultados de estudios complementarios</h2>
-        <textarea
-          className="border p-2 rounded w-full"
-          rows={3}
-          value={form.estudios}
-          onChange={set("estudios")}
-        />
+      {/* 8 Dx, Estudios y Plan */}
+      <section id="s7" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-5">
+        <div className="pb-2 border-b border-slate-100">
+          <h2 className="text-base font-bold text-slate-900">
+            8. Diagnóstico y Plan Terapéutico
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Estudios paraclínicos, juicios diagnósticos y manejo integral
+          </p>
+        </div>
 
-        <h2 className="font-medium">
-          10. Diagnóstico(s) presuntivo(s) o definitivo(s)
-        </h2>
-        <textarea
-          className="border p-2 rounded w-full"
-          rows={3}
-          value={form.diagnosticos}
-          onChange={set("diagnosticos")}
-        />
+        <div>
+          <label htmlFor="estudios" className="block text-xs font-semibold text-slate-700 mb-1.5">
+            Resultados de Estudios Complementarios / Laboratorio / Imagen
+          </label>
+          <textarea
+            id="estudios"
+            className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+            rows={3}
+            placeholder="Biometría hemática, química sanguínea, radiografía de tórax, ecografía abdominal..."
+            value={form.estudios}
+            onChange={set("estudios")}
+          />
+        </div>
 
-        <h2 className="font-medium">11. Plan / Tratamiento</h2>
-        <textarea
-          className="border p-2 rounded w-full"
-          rows={3}
-          value={form.plan}
-          onChange={set("plan")}
-        />
+        <div>
+          <label htmlFor="diagnosticos" className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+            <span>Diagnóstico(s) Presuntivo(s) o Definitivo(s)</span>
+            <span className="text-[11px] font-normal text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">CIE-10 o Juicio Clínico</span>
+          </label>
+          <textarea
+            id="diagnosticos"
+            className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-indigo-200/80 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
+            rows={3}
+            placeholder="1. Faringoamigdalitis aguda bacteriana&#10;2. Hipertensión arterial sistémica..."
+            value={form.diagnosticos}
+            onChange={set("diagnosticos")}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="plan" className="block text-xs font-semibold text-slate-700 mb-1.5">
+            Plan de Manejo / Prescripción Médica / Tratamiento
+          </label>
+          <textarea
+            id="plan"
+            className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y font-mono text-[13px]"
+            rows={4}
+            placeholder="Rp:&#10;1. Amoxicilina + Ácido Clavulánico 875/125mg VO c/12h por 7 días&#10;2. Paracetamol 500mg VO c/8h por 3 días si dolor/fiebre&#10;3. Abundante hidratación y reposo relativo"
+            value={form.plan}
+            onChange={set("plan")}
+          />
+        </div>
       </section>
 
-      <section id="s8" className="border rounded p-4">
-        <h2 className="font-medium">12. Observaciones</h2>
+      {/* 9 Observaciones */}
+      <section id="s8" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+        <div className="pb-2 border-b border-slate-100">
+          <h2 className="text-base font-bold text-slate-900">
+            9. Observaciones y Recomendaciones
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Notas de evolución, señales de alarma informadas al paciente o cita de control
+          </p>
+        </div>
+
         <textarea
-          className="border p-2 rounded w-full"
+          id="observaciones"
+          className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-hidden resize-y"
           rows={3}
+          placeholder="Se explican signos de alarma por los que acudir a urgencias. Paciente comprende indicaciones. Cita de control programada..."
           value={form.observaciones}
           onChange={set("observaciones")}
         />
+
+        <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+          <Link
+            to={`/patients/${patientId}/records`}
+            className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-colors"
+          >
+            Cancelar
+          </Link>
+          <button
+            onClick={() => upsert.mutate()}
+            className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 shadow-md shadow-indigo-100 transition-all cursor-pointer disabled:opacity-50"
+            disabled={upsert.isPending}
+          >
+            {upsert.isPending ? "Guardando…" : isEdit ? "Guardar Cambios" : "Crear Consulta"}
+          </button>
+        </div>
       </section>
     </div>
   );
